@@ -188,4 +188,17 @@ def make_thermal_mesh(low_res, main_folder, rgb_folder, thermal_folder, texture_
     doc.save(path=main_folder + "/" + 'agisoft.psx', chunks=[chunkrgb, chunkpreTHERMAL, chunkTHERMAL])
 
     os.remove(camera_ref_file)
-
+    
+def create_ortho(main_folder)
+    doc.open(path=main_folder + "/" + 'agisoft.psx')
+    for ch in doc.chunks:
+        if ch.label == 'RGB':
+            ch.buildOrthomosaic()
+            ch.exportRaster(path=HomeDirectory + "/" + "orthomosaïc_RGB.tif")
+        if ch.label == 'prethermal':
+            ch.buildOrthomosaic()
+            ch.exportRaster(path=HomeDirectory + "/" + "orthomosaïc_thermal_method1.tif")
+        if ch.label == 'thermal':
+            ch.buildOrthomosaic()
+            ch.exportRaster(path=HomeDirectory + "/" + "orthomosaïc_thermal_method2.tif")
+    doc.save(path=HomeDirectory + "/" + ProjectName)
