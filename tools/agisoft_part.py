@@ -189,3 +189,5 @@ def make_thermal_mesh(low_res, main_folder, rgb_folder, thermal_folder, texture_
 
     os.remove(camera_ref_file)
 
+def this_is_a_function():
+    pass
