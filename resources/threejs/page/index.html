@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - OBJLoader + MTLLoader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
+
+	<body>
+		<div id="info">
+		<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - OBJLoader + MTLLoader
+		</div>
+
+		<script type="module">
+
+			import * as THREE from './build/three.module.js';
+
+			import { GUI } from './jsm/libs/dat.gui.module.js';
+			import { DDSLoader } from './jsm/loaders/DDSLoader.js';
+			import { MTLLoader } from './jsm/loaders/MTLLoader.js';
+			import { OBJLoader } from './jsm/loaders/OBJLoader.js';
+			import { OrbitControls } from './jsm/controls/OrbitControls.js';
+
+			let camera, scene, renderer, volconfig, material, main_mesh;
+
+			let mouseX = 0, mouseY = 0;
+
+			let windowHalfX = window.innerWidth / 2;
+			let windowHalfY = window.innerHeight / 2;
+
+
+			init();
+			animate();
+
+
+			function init() {
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+				// camera
+				camera = new THREE.PerspectiveCamera( 30, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.up.set(0,0,1);
+
+				// Controls
+				const controls = new OrbitControls( camera, renderer.domElement );
+				controls.damping = 0.2;
+				controls.addEventListener( 'change', render );
+				
+				// scene
+				scene = new THREE.Scene();
+				scene.add( camera );
+
+				// light
+				scene.add( new THREE.HemisphereLight( 0xffffff, 0xffffff, 1.5 ) );
+
+				// GUI
+				volconfig = { renderstyle: 'iso', texture: 'rgb' };
+				const gui = new GUI();
+				gui.add(volconfig, 'texture', { rgb: 'color', thermal: 'thermal' } ).onChange( updateTexture );
+
+
+				// model
+				material = new THREE.MeshStandardMaterial();
+
+				new OBJLoader()
+					.load( './model_thermal.obj', function ( group ) {
+
+						const loader = new THREE.TextureLoader()
+
+						material.roughness = 1; // attenuates roughnessMap
+						material.metalness = 0; // attenuates metalnessMap
+
+						const diffuseMap = loader.load( 'model.jpg' )
+						diffuseMap.encoding = THREE.sRGBEncoding;
+						
+						material.map = diffuseMap;
+						// roughness is in G channel, metalness is in B channel
+						
+						group.traverse( function ( child ) {
+
+							if ( child.isMesh ) {
+
+								child.material = material;
+
+							}
+						} );
+
+						main_mesh = group
+						scene.add( main_mesh );
+						
+						render();
+
+					} );
+
+				//
+
+
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove );
+
+
+				
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize );
+
+			}
+
+			function updateTexture() {
+				const loader = new THREE.TextureLoader()
+							
+				let texture_file = 'model.jpg';
+				if (volconfig.texture == 'thermal') {
+					texture_file = 'model_thermal.jpg'
+				}
+
+				const diffuseMap = loader.load( texture_file )
+				diffuseMap.encoding = THREE.sRGBEncoding;
+				
+				material.map = diffuseMap;
+				// roughness is in G channel, metalness is in B channel
+				
+				main_mesh.traverse( function ( child ) {
+
+					if ( child.isMesh ) {
+
+						child.material = material;
+
+					}
+				} );
+
+				render();
+
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = ( event.clientX - windowHalfX ) / 2;
+				mouseY = ( event.clientY - windowHalfY ) / 2;
+
+			}
+
+			//
+			function animate() {
+				requestAnimationFrame( animate );
+				renderer.render( scene, camera );
+			}
+			
+			function render() {
+				
+				renderer.render( scene, camera);
+
+			}
+
+
+		</script>
+
+	</body>
+</html>
