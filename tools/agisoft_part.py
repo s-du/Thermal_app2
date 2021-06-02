@@ -189,7 +189,7 @@ def make_thermal_mesh(low_res, main_folder, rgb_folder, thermal_folder, texture_
 
     os.remove(camera_ref_file)
     
-def create_ortho(main_folder)
+def create_ortho(main_folder):
     doc.open(path=main_folder + "/" + 'agisoft.psx')
     for ch in doc.chunks:
         if ch.label == 'RGB':

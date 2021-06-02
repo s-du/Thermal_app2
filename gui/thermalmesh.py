@@ -105,6 +105,7 @@ class ThermalWindow(QtWidgets.QMainWindow):
         self.pushButton_go_img.clicked.connect(self.go_img)
         self.pushButton_go_mesh.clicked.connect(self.go_mesh)
         self.pushButton_go_visu.clicked.connect(self.go_visu)
+        self.pushButton_estimate.clicked.connect(self.go_estimate)
         self.comboBox.currentIndexChanged.connect(self.on_combo_changed)
 
     def update_progress(self, text, nb):
@@ -129,12 +130,16 @@ class ThermalWindow(QtWidgets.QMainWindow):
             self.pushButton_go_img.setEnabled(True)
             self.pushButton_go_mesh.setEnabled(True)
             self.pushButton_go_visu.setEnabled(True)
+            self.pushButton_estimate.setEnabled(True)
+            self.checkBox_ortho.setEnabled(True)
+            self.checkBox_pdf.setEnabled(True)
+            self.checkBox_masks.setEnabled(True)
 
             # Fill combobox with colormaps choices
-            self.colormap_list = ['plasma', 'inferno', 'Greys', 'Greys_r', 'coolwarm', 'jet', 'rainbow', 'Spectral_r']
+            self.colormap_list = ['plasma', 'inferno', 'Greys', 'Greys_r', 'coolwarm', 'jet', 'rainbow', 'Spectral']
             self.comboBox.addItems(self.colormap_list)
 
-            self.update_progress("Status: Choose colormap and temp's", 0)
+            self.update_progress("Status: Choose colormap, options and temp's", 0)
 
     def go_img(self):
         # Collect reconstruction parameters
@@ -176,6 +181,8 @@ class ThermalWindow(QtWidgets.QMainWindow):
             elif file.endswith('R.JPG'):
                 copyfile(os.path.join(img_folder, file), os.path.join(self.thermal_process_img_folder, new_file))
                 new_path = os.path.join(self.thermal_process_img_folder, new_file)
+
+                # launch flir tool
                 fir.process_image(new_path)
                 fir.save_images(tmin, tmax, colormap, mode)
 
@@ -185,6 +192,23 @@ class ThermalWindow(QtWidgets.QMainWindow):
 
         # update buttons
         self.image_processed = True
+
+    def go_estimate(self):
+        # Note: to add: error if not a thermal file
+        ref_pic_name = QtWidgets.QFileDialog.getOpenFileName(self, 'Open file',
+                                            'c:\\', "Image files (*.jpg *.gif)")
+        img_path = ref_pic_name[0]
+
+        fir.process_image(img_path)
+        tmin, tmax = fir.compute_delta()
+        print(tmin)
+        print(tmax)
+
+        self.lineEdit_min_temp.setText(str(round(tmin, 2)))
+        self.lineEdit_max_temp.setText(str(round(tmax,2)))
+
+
+
 
 
     def go_mesh(self):

@@ -217,6 +217,14 @@ class FlirImageExtractor:
         plt.imshow(rgb_np)
         plt.show()
 
+    def compute_delta(self):
+        thermal_np = self.extract_thermal_image()
+        comp_tmin = np.amin(thermal_np)
+        comp_tmax = np.amax(thermal_np)
+
+        return comp_tmin, comp_tmax
+
+
     def save_images(self, tmin, tmax, colormap, mode):
         """
         Save the extracted images
