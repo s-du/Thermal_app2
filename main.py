@@ -32,7 +32,8 @@ def main(argv=None):
     # create the application if necessary
     if (not QtWidgets.QApplication.instance()):
         app = QtWidgets.QApplication(argv)
-        apply_stylesheet(app, 'resources/other/bbricolors.xml', invert_secondary=True)
+        #apply_stylesheet(app, 'resources/other/bbricolors.xml', invert_secondary=True)
+        apply_stylesheet(app, theme = 'light_blue.xml')
 
     # create the main window
     from gui.thermalmesh import ThermalWindow

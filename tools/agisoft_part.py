@@ -5,200 +5,182 @@ import fileinput
 import resources
 # Python script for automated AGISOFT THERMAL processing
 
-def make_thermal_mesh(low_res, main_folder, rgb_folder, thermal_folder, texture_size=4096, opt_mesh_quality = 'medium', opt_make_ortho = False):
+def make_rgb_mesh(rgb_img_folder, save_folder, opt_texture_size=4096, opt_mesh_quality = 'medium', opt_make_ortho = True):
     """
-
-    :param low_res: whether to create a low_res mesh or not
-    :param main_folder: folder for all agisoft files
-    :param rgb_folder: folder with rgb images
-    :param thermal_folder: folder with thermal images
-    :return:
+Function to create a mesh from rgb pictures, and export necessary files (e.g. camera positions)
+    @param rgb_folder:
+    @param save_folder:
     """
+    # file names
+    model_rgb_file = os.path.join(save_folder, 'mesh_rgb.obj')
+    camera_ref_file = os.path.join(save_folder, 'cameras.txt')
+    if opt_make_ortho:
+        ortho_rgb_file = os.path.join(save_folder, 'ortho_rgb.tif')
 
-    calib_file = resources.find('other/calib.xml')
-
-    model_rgb_file = os.path.join(main_folder, 'mesh_rgb.obj')
-    model_thermal_file_method1 = os.path.join(main_folder, 'mesh_thermal1.obj')
-    model_thermal_file_method2 = os.path.join(main_folder, 'mesh_thermal2.obj')
-    camera_ref_file = os.path.join(main_folder, 'cameras.txt')
-    camera_ref_file2 = os.path.join(main_folder, 'cameras_th_estimated.txt')
-
-    #new project
+    # new project
     doc = Metashape.Document()
+    doc.save(path=save_folder + "/" + 'agisoft.psx')
 
-    #creating new chunk for RGB en thermal
-    chunkrgb = doc.addChunk()
-    chunkrgb.label = 'RGB'
-
-    chunkpreTHERMAL = doc.addChunk()
-    chunkpreTHERMAL.label = 'prethermal'
-
-    chunkTHERMAL = doc.addChunk()
-    chunkTHERMAL.label = 'thermal'
-
-    """
-    ===========================================================
-    RGB
-    ==========================================================
-    """
-    chunk = chunkrgb
+    # creating new chunk for RGB
+    chk = doc.addChunk()
+    chk.label = 'RGB'
 
     # loading RGB images
-    image_list = os.listdir(rgb_folder)
+    image_list = os.listdir(rgb_img_folder)
     photo_list = []
     for photo in image_list:
-        photo_list.append("/".join([rgb_folder, photo]))
-    chunk.addPhotos(photo_list)
+        photo_list.append("/".join([rgb_img_folder, photo]))
+    chk.addPhotos(photo_list)
 
-    chunk.crs = Metashape.CoordinateSystem("EPSG::4326")
-    chunk.updateTransform()
+    chk.crs = Metashape.CoordinateSystem("EPSG::4326")
+    chk.updateTransform()
 
-    #proces RGB images
-    chunk.matchPhotos()
-    chunk.alignCameras()
-    chunk.buildDepthMaps()
-    chunk.buildModel(source_data=Metashape.DataSource.DepthMapsData)
-    chunk.buildUV(mapping_mode=Metashape.GenericMapping)
-    chunk.buildTexture(texture_size=texture_size)
+    # proces RGB images
+    chk.matchPhotos()
+    chk.alignCameras()
+    chk.buildDepthMaps()
+    chk.buildModel(source_data=Metashape.DataSource.DepthMapsData)
+    chk.buildUV(mapping_mode=Metashape.GenericMapping)
+    chk.buildTexture(texture_size=opt_texture_size) # optional argument to change texture size
     Metashape.app.update()
 
-    #export rgb model (mesh)
-    chunk.exportModel(path=model_rgb_file, precision=9, save_texture=True, save_uv=True, save_markers=False, crs=Metashape.CoordinateSystem("EPSG::4326"))
+    # export rgb model (mesh)
+    chk.exportModel(path=model_rgb_file, precision=9, save_texture=True, save_uv=True, save_markers=False,
+                      crs=Metashape.CoordinateSystem("EPSG::4326"))
 
-    #export rgb camera orientations
-    chunk.exportReference(path=camera_ref_file, format=Metashape.ReferenceFormatCSV, items=Metashape.ReferenceItemsCameras, columns='nuvwdefxyz', delimiter=' ') #nox/y/zuvw
+    doc.save()
+    # make ortho if needed
+    if opt_make_ortho:
+        chk.buildOrthomosaic(surface_data=Metashape.ModelData)
+        chk.exportRaster(ortho_rgb_file)
+
+    # export rgb camera orientations
+    chk.exportReference(path=camera_ref_file, format=Metashape.ReferenceFormatCSV,
+                          items=Metashape.ReferenceItemsCameras, columns='nuvwdefxyz', delimiter=' ')  # nox/y/zuvw
 
     # modify reference
     with fileinput.FileInput(camera_ref_file, inplace=True) as file:
         for line in file:
             print(line.replace('.jpg', '_thermal.png'), end='')
 
+
+def make_thermal_mesh(rgb_model_folder, thermal_img_folder, save_folder, opt_use_masks = False,
+                      opt_fixed_position = False, opt_make_ortho = True, opt_save_agisoft =  True):
     """
-    ===========================================================
-    PRE-THERMAL (with thermal image alignment)
-    ==========================================================
+Function to import a rgb mesh file, and apply thermal texture
+    @param rgb_model_folder:
+    @param thermal_img_folder:
+    @param save_folder:
     """
-    chunk = chunkpreTHERMAL
-    chunkpreTHERMAL.crs = Metashape.CoordinateSystem("EPSG::4326")
-    chunkpreTHERMAL.updateTransform()
+    # file names
+    calib_file = resources.find('other/calib_V2.xml') # camera calibration file
+    mask_file = resources.find('img/mask.png') # mask file
+    model_rgb_file = os.path.join(rgb_model_folder, 'mesh_rgb.obj')
+    model_th_file = os.path.join(save_folder, 'mesh_th.obj')
+
+    doc = Metashape.Document()
+    doc.save(path=save_folder + "/" + 'agisoft_thermal.psx')
+
+    camera_ref_file = os.path.join(rgb_model_folder, 'cameras.txt') # camera loc and rot from rgb processing
+    if opt_make_ortho:
+        ortho_th_file = os.path.join(save_folder, 'ortho_th.tif')
+
+    # creating new chunk for RGB en thermal
+    chk = doc.addChunk()
+    chk.label = 'thermal'
+
+    T = chk.transform.matrix
+    chk.crs = Metashape.CoordinateSystem("EPSG::4326")
+    chk.updateTransform()
 
     # load thermal images in
-    image_list = os.listdir(thermal_folder)
-    photo_list = list()
+    image_list = os.listdir(thermal_img_folder)
+    photo_list = []
     for photo in image_list:
-        photo_list.append("/".join([thermal_folder, photo]))
-    chunk.addPhotos(photo_list)
+        photo_list.append("/".join([thermal_img_folder, photo]))
+    chk.addPhotos(photo_list)
+
+    # load masks if needed
+    if opt_use_masks:
+        chk.generateMasks(path=mask_file, masking_mode=Metashape.MaskingModeFile)
 
     # import calibration
     user_calib = Metashape.Calibration()
     user_calib.load(calib_file)
 
     # import RGB camera orientations for thermal images
-    chunk.importReference(path=camera_ref_file, format=Metashape.ReferenceFormatCSV, delimiter=' ', columns='nxyzabc',
+    chk.importReference(path=camera_ref_file, format=Metashape.ReferenceFormatCSV, delimiter=' ', columns='nxyzabc',
                           skip_rows=2)
 
-    chunk.camera_location_accuracy = Metashape.Vector([0.02, 0.02, 0.02])
-    chunk.camera_rotation_accuracy = Metashape.Vector([0.5, 0.5, 0.5])
-
-    chunk.updateTransform()
-
     # add calibration to cameras
-    for camera in chunk.cameras:
-        camera.Reference.rotation_enabled = True
+    for camera in chk.cameras:
         camera.sensor.user_calib = user_calib
-        camera.sensor.label = "mijnCamera"
         camera.sensor.fixed = True
+        camera.sensor.fixed_rotation = True
 
-    # proces thermal images
-    chunk.matchPhotos()
-    chunk.alignCameras()
-    chunk.importModel(path=model_rgb_file, format=Metashape.ModelFormatOBJ,
-                      crs=Metashape.CoordinateSystem("EPSG::4326"))  # p36
+    # here distinction between fixed camera position, and method with camera alignment
+    if not opt_fixed_position:
+        chk.camera_location_accuracy = Metashape.Vector([0.02, 0.02, 0.02])
+        chk.camera_rotation_accuracy = Metashape.Vector([0.5, 0.5, 0.5])
+        chk.updateTransform()
 
-    chunk.buildTexture(texture_size=texture_size)
-    chunk.exportModel(path=model_thermal_file_method1, precision=9, save_texture=True, save_uv=True, save_markers=False,
+        # proces thermal images
+        chk.matchPhotos()
+        chk.alignCameras()
+    else:
+        origin = None
+        for camera in chk.cameras:
+            if not camera.type == Metashape.Camera.Type.Regular:
+                continue
+            if not camera.reference.location:
+                continue
+            if not camera.reference.rotation:
+                continue
+
+            pos = crs.unproject(camera.reference.location)
+            m = crs.localframe(pos)
+            rot = Metashape.utils.ypr2mat(camera.reference.rotation) * Metashape.Matrix().Diag([1, -1, -1])
+            R = Metashape.Matrix().Translation(pos) * Metashape.Matrix().Rotation(m.rotation().t() * rot)
+
+            if not origin:
+                origin = pos
+                chk.transform.matrix = Metashape.Matrix().Translation(origin)
+                T = chk.transform.matrix
+
+            camera.transform = T.inv() * R
+        chk.updateTransform()
+
+    # last operations (importing model and creating texture)
+    chk.importModel(path=model_rgb_file, format=Metashape.ModelFormatOBJ,
+                          crs=Metashape.CoordinateSystem("EPSG::4326"))
+    chk.buildTexture()
+    chk.exportModel(path=model_th_file, precision=9, save_texture=True, save_uv=True, save_markers=False,
                       crs=Metashape.CoordinateSystem(
                           'LOCAL_CS["Local CS",LOCAL_DATUM["Local Datum",0],UNIT["metre",1]]'))
 
-    # export rgb camera orientations
-    chunk.exportReference(path=camera_ref_file2, format=Metashape.ReferenceFormatCSV,
-                          items=Metashape.ReferenceItemsCameras, columns='nuvwdefxyz', delimiter=' ')  # nox/y/zuvw
+    # make ortho if needed
+    doc.save()
+    if opt_make_ortho:
+        chk.buildOrthomosaic(surface_data=Metashape.ModelData, resolution=0.01)
+        chk.exportRaster(ortho_th_file)
 
-    """
-    ===========================================================
-    THERMAL (thermal images only for texturing)
-    ===========================================================
-    """
-    chunk = chunkTHERMAL
-    crs = chunk.crs
-    T = chunk.transform.matrix
-    chunk.crs = Metashape.CoordinateSystem("EPSG::4326")
-    chunk.updateTransform()
+    if opt_save_agisoft:
+        doc.save()
 
-    #load thermal images in
-    image_list = os.listdir(thermal_folder)
-    photo_list = list()
-    for photo in image_list:
-        photo_list.append("/".join([thermal_folder, photo]))
-    chunk.addPhotos(photo_list)
 
-    #import calibration
-    user_calib = Metashape.Calibration()
-    user_calib.load(calib_file)
 
-    # import RGB camera orientations for thermal images
-    chunk.importReference(path=camera_ref_file, format=Metashape.ReferenceFormatCSV, delimiter=' ', columns='nxyzabc',
-                          skip_rows=2)
-
-    #add calibration to cameras
-    for camera in chunk.cameras:
-        camera.sensor.user_calib = user_calib
-        camera.sensor.label = "mijnCamera"
-        camera.sensor.fixed = True
-
-    # From forum
-    origin = None
-    for camera in chunk.cameras:
-        if not camera.type == Metashape.Camera.Type.Regular:
-            continue
-        if not camera.reference.location:
-            continue
-        if not camera.reference.rotation:
-            continue
-
-        pos = crs.unproject(camera.reference.location)
-        m = crs.localframe(pos)
-        rot = Metashape.utils.ypr2mat(camera.reference.rotation) * Metashape.Matrix().Diag([1, -1, -1])
-        R = Metashape.Matrix().Translation(pos) * Metashape.Matrix().Rotation(m.rotation().t() * rot)
-
-        if not origin:
-            origin = pos
-            chunk.transform.matrix = Metashape.Matrix().Translation(origin)
-            T = chunk.transform.matrix
-
-        camera.transform = T.inv() * R
-    chunk.updateTransform()
-
-    #import rgbmesh
-    chunk.importModel(path=model_rgb_file, format=Metashape.ModelFormatOBJ, crs=Metashape.CoordinateSystem("EPSG::4326")) #p36
-
-    chunk.buildTexture(texture_size=texture_size)
-    chunk.exportModel(path=model_thermal_file_method2, precision=9, save_texture=True, save_uv=True, save_markers=False, crs=Metashape.CoordinateSystem('LOCAL_CS["Local CS",LOCAL_DATUM["Local Datum",0],UNIT["metre",1]]'))
-
-    doc.save(path=main_folder + "/" + 'agisoft.psx', chunks=[chunkrgb, chunkpreTHERMAL, chunkTHERMAL])
-
-    os.remove(camera_ref_file)
     
-def create_ortho(main_folder):
-    doc.open(path=main_folder + "/" + 'agisoft.psx')
+def create_ortho(agisoft_model_folder):
+    doc = Metashape.Document()
+    doc.open(path=agisoft_model_folder + "/" + 'agisoft.psx')
     for ch in doc.chunks:
         if ch.label == 'RGB':
             ch.buildOrthomosaic()
-            ch.exportRaster(path=HomeDirectory + "/" + "orthomosaïc_RGB.tif")
+            ch.exportRaster(path=agisoft_model_folder + "/" + "orthomosaïc_RGB.tif")
         if ch.label == 'prethermal':
             ch.buildOrthomosaic()
-            ch.exportRaster(path=HomeDirectory + "/" + "orthomosaïc_thermal_method1.tif")
+            ch.exportRaster(path=agisoft_model_folder + "/" + "orthomosaïc_thermal_method1.tif")
         if ch.label == 'thermal':
             ch.buildOrthomosaic()
-            ch.exportRaster(path=HomeDirectory + "/" + "orthomosaïc_thermal_method2.tif")
-    doc.save(path=HomeDirectory + "/" + ProjectName)
+            ch.exportRaster(path=agisoft_model_folder + "/" + "orthomosaïc_thermal_method2.tif")
+

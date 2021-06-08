@@ -6,7 +6,7 @@ import pip
 def install_whl(path):
     pip.main(['install', path])
 
-install_whl(r'C:\Users\sdu\Desktop\Python 2021\Thermal V2\resources\other\Metashape-1.7.1-cp35.cp36.cp37.cp38-none-win_amd64.whl')
+install_whl(r'C:\Users\sdu\Desktop\Python 2021\Thermal_app\resources\other\Metashape-1.7.3-cp35.cp36.cp37.cp38-none-win_amd64.whl')
 ________________________________
 
 pip install qt-material
